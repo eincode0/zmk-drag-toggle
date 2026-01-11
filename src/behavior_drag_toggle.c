@@ -5,11 +5,11 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/behavior.h>
+#include <drivers/behavior.h>
 
 #include <zmk/behavior.h>
-#include <zmk/mouse.h>                 // ← こっちを使う
-#include <dt-bindings/zmk/mouse.h>     // ← MOUSE_BTN_LEFT など
+
+/* ここは環境によって有無が分かれるので、まずは mouse 系は使わない（次の手で確実にする） */
 
 struct drag_toggle_data {
     bool active;
@@ -22,17 +22,17 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
 
     data->active = !data->active;
 
-    if (data->active) {
-        zmk_mouse_button_press(MOUSE_BTN_LEFT);
-    } else {
-        zmk_mouse_button_release(MOUSE_BTN_LEFT);
-    }
+    /* ここはいったんダミー（ビルド通過確認用）
+       ビルドが通ったら「押す/離す」を本実装に差し替える */
+    (void)event;
 
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
 static int drag_toggle_released(struct zmk_behavior_binding *binding,
                                 struct zmk_behavior_binding_event event) {
+    (void)binding;
+    (void)event;
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
