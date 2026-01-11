@@ -1,8 +1,9 @@
 /*
- * Drag toggle behavior for ZMK
+ * SPDX-License-Identifier: MIT
  */
 #define DT_DRV_COMPAT zmk_behavior_drag_toggle
 
+#include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <drivers/behavior.h>
 
@@ -15,7 +16,8 @@ struct drag_toggle_data {
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    struct drag_toggle_data *data = binding->behavior_dev->data;
+    const struct device *dev = binding->behavior_dev;
+    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
     data->active = !data->active;
 
@@ -39,17 +41,14 @@ static const struct behavior_driver_api drag_toggle_api = {
 };
 
 static int drag_toggle_init(const struct device *dev) {
-    struct drag_toggle_data *data = dev->data;
+    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
     data->active = false;
     return 0;
 }
 
-DEVICE_DT_INST_DEFINE(0,
-    drag_toggle_init,
-    NULL,
-    &(struct drag_toggle_data){},
-    NULL,
-    APPLICATION,
-    CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-    &drag_toggle_api
-);
+static struct drag_toggle_data drag_toggle_data_0;
+
+DEVICE_DT_INST_DEFINE(0, drag_toggle_init, NULL,
+                      &drag_toggle_data_0, NULL,
+                      APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+                      &drag_toggle_api);
