@@ -1,0 +1,3 @@
+name: zmk-drag-toggle
+build:
+  cmake: .
