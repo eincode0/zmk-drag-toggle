@@ -5,10 +5,11 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
-#include <drivers/behavior.h>
+#include <zephyr/drivers/behavior.h>
 
 #include <zmk/behavior.h>
-#include <zmk/pointing.h>
+#include <zmk/mouse.h>                 // ← こっちを使う
+#include <dt-bindings/zmk/mouse.h>     // ← MOUSE_BTN_LEFT など
 
 struct drag_toggle_data {
     bool active;
@@ -22,9 +23,9 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
     data->active = !data->active;
 
     if (data->active) {
-        zmk_pointing_button_press(POINTING_BUTTON_LEFT);
+        zmk_mouse_button_press(MOUSE_BTN_LEFT);
     } else {
-        zmk_pointing_button_release(POINTING_BUTTON_LEFT);
+        zmk_mouse_button_release(MOUSE_BTN_LEFT);
     }
 
     return ZMK_BEHAVIOR_OPAQUE;
