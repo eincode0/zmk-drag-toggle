@@ -47,9 +47,11 @@ static int drag_toggle_init(const struct device *dev) {
     return 0;
 }
 
-static struct drag_toggle_data drag_toggle_data_0;
+#define DRAG_TOGGLE_DEVICE(inst)                                                     \
+    static struct drag_toggle_data drag_toggle_data_##inst;                           \
+    DEVICE_DT_INST_DEFINE(inst, drag_toggle_init, NULL,                               \
+                          &drag_toggle_data_##inst, NULL,                             \
+                          APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,           \
+                          &drag_toggle_api);
 
-DEVICE_DT_INST_DEFINE(0, drag_toggle_init, NULL,
-                      &drag_toggle_data_0, NULL,
-                      APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-                      &drag_toggle_api);
+DT_INST_FOREACH_STATUS_OKAY(DRAG_TOGGLE_DEVICE)
