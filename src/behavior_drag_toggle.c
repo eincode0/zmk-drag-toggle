@@ -8,7 +8,7 @@
 #include <drivers/behavior.h>
 
 #include <zmk/behavior.h>
-#include <zmk/mouse.h>
+#include <zmk/pointing.h>
 
 struct drag_toggle_data {
     bool active;
@@ -22,9 +22,9 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
     data->active = !data->active;
 
     if (data->active) {
-        zmk_mouse_button_press(MOUSE_BUTTON_LEFT);
+        zmk_pointing_button_press(POINTING_BUTTON_LEFT);
     } else {
-        zmk_mouse_button_release(MOUSE_BUTTON_LEFT);
+        zmk_pointing_button_release(POINTING_BUTTON_LEFT);
     }
 
     return ZMK_BEHAVIOR_OPAQUE;
