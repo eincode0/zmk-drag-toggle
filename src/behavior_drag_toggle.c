@@ -5,19 +5,26 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
+#include <zephyr/drivers/behavior.h>
 
 #include <zmk/behavior.h>
+
+/*
+ * settings_reset などで CONFIG_ZMK_MOUSE が無い場合、
+ * zmk_hid_mouse_button_* がリンクされず落ちるのでガードする。
+ */
+#if IS_ENABLED(CONFIG_ZMK_MOUSE)
 #include <zmk/hid.h>
-#include <dt-bindings/zmk/mouse.h>
+#endif
 
 #ifndef DT_TAP_TERM_MS
-#define DT_TAP_TERM_MS 250 /* ダブルクリック判定(ms) */
+#define DT_TAP_TERM_MS 180 /* 単押し遅延(ダブル判定). 好みで 120〜220 くらい */
 #endif
 
 struct drag_toggle_data {
-    bool locked;                     /* ドラッグロック中か */
-    bool pending_single;             /* 単押し(クリック)待ち */
-    uint32_t pending_button;         /* 待ってるボタン(MB1等) */
+    bool locked;             /* ドラッグロック中か */
+    bool pending_single;     /* 単押し(クリック)待ち */
+    uint32_t pending_button; /* 待ってるボタン(MB1等) */
     struct k_work_delayable single_work;
 };
 
@@ -33,9 +40,13 @@ static void do_click_work(struct k_work *work) {
     uint32_t btn = data->pending_button;
     data->pending_single = false;
 
+#if IS_ENABLED(CONFIG_ZMK_MOUSE)
     /* 単押し = click (press -> release) */
     zmk_hid_mouse_button_press(btn);
     zmk_hid_mouse_button_release(btn);
+#else
+    (void)btn;
+#endif
 }
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
@@ -50,7 +61,9 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
 
     /* ロック中なら、押した瞬間に解除 */
     if (data->locked) {
+#if IS_ENABLED(CONFIG_ZMK_MOUSE)
         zmk_hid_mouse_button_release(button);
+#endif
         data->locked = false;
         data->pending_single = false;
         k_work_cancel_delayable(&data->single_work);
@@ -62,13 +75,15 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
         data->pending_single = false;
         k_work_cancel_delayable(&data->single_work);
 
+#if IS_ENABLED(CONFIG_ZMK_MOUSE)
         /* ダブル押し = ロックON（pressしたまま） */
         zmk_hid_mouse_button_press(button);
+#endif
         data->locked = true;
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    /* 1回目：ダブル判定待ちを開始（期限まで2回目が来なければ click） */
+    /* 1回目：ダブル判定待ち（期限まで2回目が来なければ click） */
     data->pending_single = true;
     data->pending_button = button;
     k_work_reschedule(&data->single_work, K_MSEC(DT_TAP_TERM_MS));
@@ -92,7 +107,7 @@ static int drag_toggle_init(const struct device *dev) {
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
     data->locked = false;
     data->pending_single = false;
-    data->pending_button = MB1;
+    data->pending_button = 0;
     k_work_init_delayable(&data->single_work, do_click_work);
     return 0;
 }
