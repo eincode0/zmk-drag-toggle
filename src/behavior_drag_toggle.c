@@ -25,10 +25,10 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
 
     /* ZMK標準の &mkp を呼び出す */
     struct zmk_behavior_binding mkp_binding = {
-        .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(mkp)),
-        .param1 = button,
-        .param2 = 0,
-    };
+    .behavior_dev = DT_LABEL(DT_NODELABEL(mkp)),  /* ← const char* を渡す */
+    .param1 = button,
+    .param2 = 0,
+};
 
     if (!data->locked) {
         zmk_behavior_queue_add(&mkp_binding, event, true);   // press
