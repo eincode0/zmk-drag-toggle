@@ -1,11 +1,13 @@
 /*
  * SPDX-License-Identifier: MIT
  */
+/*
+ * SPDX-License-Identifier: MIT
+ */
 #define DT_DRV_COMPAT zmk_behavior_drag_toggle
 
-#include <zephyr/device.h>
-#include <zephyr/drivers/behavior.h>
 #include <zephyr/kernel.h>
+#include <zephyr/device.h>
 
 #include <zmk/behavior.h>
 #include <zmk/mouse.h>
