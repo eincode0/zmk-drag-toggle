@@ -10,6 +10,10 @@
 
 #include <zmk/behavior.h>
 
+#if !DT_NODE_EXISTS(DT_NODELABEL(mkp))
+#error "DT_NODELABEL(mkp) not found. Your ZMK devicetree has no node label 'mkp'."
+#endif
+
 struct drag_toggle_data {
     bool locked;
 };
