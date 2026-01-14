@@ -8,7 +8,6 @@
 #include <zephyr/drivers/behavior.h>
 
 #include <zmk/behavior.h>
-#include <zmk/behavior_queue.h>
 
 struct drag_toggle_data {
     bool locked;
@@ -16,21 +15,26 @@ struct drag_toggle_data {
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    (void)event;
+    /* one_param.yaml 想定：binding->param1 に MB1 などが入る */
+    uint32_t button = binding->param1;
 
     const struct device *dev = binding->behavior_dev;
-    struct drag_toggle_data *data = dev->data;
+    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    struct zmk_behavior_binding mb1 = {
+    /* ZMK標準の &mkp を“呼び出す”ための binding を作る */
+    struct zmk_behavior_binding mkp_binding = {
         .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(mkp)),
-        .param1 = binding->param1, /* MB1 */
+        .param1 = button,
+        .param2 = 0,
     };
 
     if (!data->locked) {
-        zmk_behavior_invoke_binding(&mb1, true);
+        /* 押しっぱなし開始 = press */
+        zmk_behavior_invoke_binding(&mkp_binding, event, true);
         data->locked = true;
     } else {
-        zmk_behavior_invoke_binding(&mb1, false);
+        /* 押しっぱなし終了 = release */
+        zmk_behavior_invoke_binding(&mkp_binding, event, false);
         data->locked = false;
     }
 
@@ -50,7 +54,7 @@ static const struct behavior_driver_api drag_toggle_api = {
 };
 
 static int drag_toggle_init(const struct device *dev) {
-    struct drag_toggle_data *data = dev->data;
+    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
     data->locked = false;
     return 0;
 }
