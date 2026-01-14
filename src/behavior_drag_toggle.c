@@ -15,8 +15,7 @@
 #define DT_TAP_TERM_MS 250
 #endif
 
-/* ZMK標準の &mkp を呼ぶための “device名(文字列)” */
-#define MKP_DEV_NAME DT_LABEL(DT_NODELABEL(mkp))
+#define MKP_DEV_NAME "mouse_key_press"
 
 struct drag_toggle_data {
     bool locked;
