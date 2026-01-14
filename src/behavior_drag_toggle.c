@@ -11,7 +11,7 @@
 #include <zmk/behavior.h>
 
 #if !DT_NODE_EXISTS(DT_NODELABEL(mkp))
-#error "DT_NODELABEL(mkp) not found. Your ZMK devicetree has no node label 'mkp'."
+#error "DT_NODELABEL(mkp) not found. Replace DT_NODELABEL(mkp) with your MKP behavior node label."
 #endif
 
 struct drag_toggle_data {
@@ -23,25 +23,20 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
     /* one_param.yaml 想定：binding->param1 に MB1 などが入る */
     uint32_t button = binding->param1;
 
-    const struct device *dev = binding->behavior_dev;
+    /* あなたの環境に合わせて“binding->behavior_dev から device を取る” */
+    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    /* ZMK標準の &mkp を“呼び出す”ための binding を作る */
+    /* ZMK標準の &mkp を呼び出すための binding */
     struct zmk_behavior_binding mkp_binding = {
         .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(mkp)),
         .param1 = button,
         .param2 = 0,
     };
 
-    if (!data->locked) {
-        /* 押しっぱなし開始 = press */
-        zmk_behavior_invoke_binding(&mkp_binding, event, true);
-        data->locked = true;
-    } else {
-        /* 押しっぱなし終了 = release */
-        zmk_behavior_invoke_binding(&mkp_binding, event, false);
-        data->locked = false;
-    }
+    /* ↓ここだけ「ZMK側の呼び出しAPI」で分岐（下のA/Bどちらかにする） */
+    (void)mkp_binding;
+    (void)event;
 
     return ZMK_BEHAVIOR_OPAQUE;
 }
