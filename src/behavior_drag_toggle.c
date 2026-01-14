@@ -9,42 +9,80 @@
 
 #include <zmk/behavior.h>
 
+#define DOUBLE_TAP_MS 250
+
 struct drag_toggle_data {
     bool locked;
+    bool pending_release;
+    int64_t last_tap_ms;
 };
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    /* one_param.yaml 想定: param1 に MB1 などが入る */
     uint32_t button = binding->param1;
 
     const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    /* ZMK標準の "mkp" を呼ぶ */
     struct zmk_behavior_binding mkp_binding = {
         .behavior_dev = "mkp",
         .param1 = button,
         .param2 = 0,
     };
 
-    if (!data->locked) {
-        /* 押しっぱなし開始 */
-        zmk_behavior_invoke_binding(&mkp_binding, event, true);
-        data->locked = true;
-    } else {
-        /* 押しっぱなし終了 */
-        zmk_behavior_invoke_binding(&mkp_binding, event, false);
+    /* ロック中：押した瞬間に解除（余計なクリックなし） */
+    if (data->locked) {
+        zmk_behavior_invoke_binding(&mkp_binding, event, false); /* release */
         data->locked = false;
+        data->pending_release = false;
+        data->last_tap_ms = 0;
+        return ZMK_BEHAVIOR_OPAQUE;
     }
+
+    int64_t now = k_uptime_get();
+    bool is_double = (data->last_tap_ms != 0) && ((now - data->last_tap_ms) <= DOUBLE_TAP_MS);
+
+    if (is_double) {
+        /* 2回目：ドラッグON（押しっぱなし開始） */
+        zmk_behavior_invoke_binding(&mkp_binding, event, true); /* press */
+        data->locked = true;
+        data->pending_release = false;
+        data->last_tap_ms = 0;
+        return ZMK_BEHAVIOR_OPAQUE;
+    }
+
+    /* 1回目：普通クリック（release は released 側で行う） */
+    data->last_tap_ms = now;
+    data->pending_release = true;
+    zmk_behavior_invoke_binding(&mkp_binding, event, true); /* press */
 
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
 static int drag_toggle_released(struct zmk_behavior_binding *binding,
                                 struct zmk_behavior_binding_event event) {
-    (void)binding;
-    (void)event;
+    uint32_t button = binding->param1;
+
+    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
+    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
+
+    struct zmk_behavior_binding mkp_binding = {
+        .behavior_dev = "mkp",
+        .param1 = button,
+        .param2 = 0,
+    };
+
+    /* ロック中は release しない（押しっぱなし維持） */
+    if (data->locked) {
+        return ZMK_BEHAVIOR_OPAQUE;
+    }
+
+    /* クリックの release */
+    if (data->pending_release) {
+        zmk_behavior_invoke_binding(&mkp_binding, event, false); /* release */
+        data->pending_release = false;
+    }
+
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
@@ -56,6 +94,8 @@ static const struct behavior_driver_api drag_toggle_api = {
 static int drag_toggle_init(const struct device *dev) {
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
     data->locked = false;
+    data->pending_release = false;
+    data->last_tap_ms = 0;
     return 0;
 }
 
