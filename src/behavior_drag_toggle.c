@@ -10,7 +10,8 @@
 #include <zephyr/device.h>
 
 #include <zmk/behavior.h>
-#include <zmk/mouse.h>
+#include <zmk/hid.h>
+#include <dt-bindings/zmk/mouse.h>
 
 struct drag_toggle_data {
     bool locked;               // ドラッグロック中か
