@@ -1,3 +1,3 @@
-description: Drag toggle behavior (toggle mouse button press/release)
+description: Drag toggle behavior (single=click, double=lock press, press again=release)
 compatible: "zmk,behavior-drag-toggle"
 include: one_param.yaml
