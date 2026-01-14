@@ -25,7 +25,7 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
 
     /* ZMK標準の &mkp を呼び出す */
     struct zmk_behavior_binding mkp_binding = {
-    .behavior_dev = DT_LABEL(DT_NODELABEL(mkp)),  /* ← const char* を渡す */
+    .behavior_dev = "mkp",   /* ← DT_LABEL(DT_NODELABEL(mkp)) をやめる */
     .param1 = button,
     .param2 = 0,
 };
