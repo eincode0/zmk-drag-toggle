@@ -3,33 +3,32 @@
  */
 #define DT_DRV_COMPAT zmk_behavior_drag_toggle
 
-#include <zephyr/kernel.h>
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 #include <drivers/behavior.h>
-#include <zephyr/devicetree.h>
 
 #include <zmk/behavior.h>
-#include <dt-bindings/zmk/mouse.h>
 
+/* ZMKの &mkp の実体(behavior)名 */
+#define MKP_BEHAVIOR_NAME "mouse_key_press"
+
+/* ダブルタップ判定(ms) */
 #ifndef DT_TAP_TERM_MS
 #define DT_TAP_TERM_MS 250
 #endif
 
-#define MKP_DEV_NAME "mouse_key_press"
-
 struct drag_toggle_data {
     bool locked;
     int64_t last_tap_ms;
-    uint32_t last_button;
 };
 
-static void invoke_mkp(uint32_t button, struct zmk_behavior_binding_event ev, bool pressed) {
+static inline void invoke_mkp(uint32_t button, struct zmk_behavior_binding_event event, bool pressed) {
     struct zmk_behavior_binding mkp = {
-        .behavior_dev = MKP_DEV_NAME,
+        .behavior_dev = MKP_BEHAVIOR_NAME,
         .param1 = button,
         .param2 = 0,
     };
-    zmk_behavior_invoke_binding(&mkp, ev, pressed);
+    zmk_behavior_invoke_binding(&mkp, event, pressed);
 }
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
@@ -40,7 +39,7 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
     uint32_t button = binding->param1;
     int64_t now = k_uptime_get();
 
-    /* ロック中：押した瞬間に解除 */
+    /* ロック中なら押した瞬間に解除 */
     if (data->locked) {
         invoke_mkp(button, event, false); /* release */
         data->locked = false;
@@ -48,22 +47,19 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    /* 直前の同ボタンからタップ間隔内 = 2回目 → press保持でロックON */
-    if (data->last_button == button && data->last_tap_ms > 0 &&
-        (now - data->last_tap_ms) <= DT_TAP_TERM_MS) {
-        invoke_mkp(button, event, true); /* press保持 */
+    /* ダブルタップならロックON（press だけ送る） */
+    if (data->last_tap_ms != 0 && (now - data->last_tap_ms) <= DT_TAP_TERM_MS) {
+        invoke_mkp(button, event, true); /* press */
         data->locked = true;
         data->last_tap_ms = 0;
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    /* 1回目：即クリック */
+    /* シングルタップは即クリック（press→release） */
     invoke_mkp(button, event, true);
     invoke_mkp(button, event, false);
 
-    data->last_button = button;
     data->last_tap_ms = now;
-
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
@@ -71,7 +67,6 @@ static int drag_toggle_released(struct zmk_behavior_binding *binding,
                                 struct zmk_behavior_binding_event event) {
     (void)binding;
     (void)event;
-    /* release側では何もしない（2回目でロックしたときに解除されないように） */
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
@@ -84,7 +79,6 @@ static int drag_toggle_init(const struct device *dev) {
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
     data->locked = false;
     data->last_tap_ms = 0;
-    data->last_button = MB1;
     return 0;
 }
 
