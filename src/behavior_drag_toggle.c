@@ -5,84 +5,81 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
-#include <drivers/behavior.h>
 
 #include <zmk/behavior.h>
+#include <zmk/hid.h>
+#include <dt-bindings/zmk/mouse.h>
 
-#define DOUBLE_TAP_MS 250
+#ifndef DT_TAP_TERM_MS
+#define DT_TAP_TERM_MS 250 /* ダブルクリック判定(ms) */
+#endif
 
 struct drag_toggle_data {
-    bool locked;
-    bool pending_release;
-    int64_t last_tap_ms;
+    bool locked;                     /* ドラッグロック中か */
+    bool pending_single;             /* 単押し(クリック)待ち */
+    uint32_t pending_button;         /* 待ってるボタン(MB1等) */
+    struct k_work_delayable single_work;
 };
+
+static void do_click_work(struct k_work *work) {
+    struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+    struct drag_toggle_data *data =
+        CONTAINER_OF(dwork, struct drag_toggle_data, single_work);
+
+    if (!data->pending_single) {
+        return;
+    }
+
+    uint32_t btn = data->pending_button;
+    data->pending_single = false;
+
+    /* 単押し = click (press -> release) */
+    zmk_hid_mouse_button_press(btn);
+    zmk_hid_mouse_button_release(btn);
+}
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    uint32_t button = binding->param1;
+    (void)event;
 
     const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    struct zmk_behavior_binding mkp_binding = {
-        .behavior_dev = "mkp",
-        .param1 = button,
-        .param2 = 0,
-    };
+    /* one_param.yaml 想定：binding->param1 に MB1/MB2... */
+    uint32_t button = binding->param1;
 
-    /* ロック中：押した瞬間に解除（余計なクリックなし） */
+    /* ロック中なら、押した瞬間に解除 */
     if (data->locked) {
-        zmk_behavior_invoke_binding(&mkp_binding, event, false); /* release */
+        zmk_hid_mouse_button_release(button);
         data->locked = false;
-        data->pending_release = false;
-        data->last_tap_ms = 0;
+        data->pending_single = false;
+        k_work_cancel_delayable(&data->single_work);
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    int64_t now = k_uptime_get();
-    bool is_double = (data->last_tap_ms != 0) && ((now - data->last_tap_ms) <= DOUBLE_TAP_MS);
+    /* すでに単押し待ちがある = 2回目(ダブル) */
+    if (data->pending_single && data->pending_button == button) {
+        data->pending_single = false;
+        k_work_cancel_delayable(&data->single_work);
 
-    if (is_double) {
-        /* 2回目：ドラッグON（押しっぱなし開始） */
-        zmk_behavior_invoke_binding(&mkp_binding, event, true); /* press */
+        /* ダブル押し = ロックON（pressしたまま） */
+        zmk_hid_mouse_button_press(button);
         data->locked = true;
-        data->pending_release = false;
-        data->last_tap_ms = 0;
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    /* 1回目：普通クリック（release は released 側で行う） */
-    data->last_tap_ms = now;
-    data->pending_release = true;
-    zmk_behavior_invoke_binding(&mkp_binding, event, true); /* press */
+    /* 1回目：ダブル判定待ちを開始（期限まで2回目が来なければ click） */
+    data->pending_single = true;
+    data->pending_button = button;
+    k_work_reschedule(&data->single_work, K_MSEC(DT_TAP_TERM_MS));
 
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
 static int drag_toggle_released(struct zmk_behavior_binding *binding,
                                 struct zmk_behavior_binding_event event) {
-    uint32_t button = binding->param1;
-
-    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
-    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
-
-    struct zmk_behavior_binding mkp_binding = {
-        .behavior_dev = "mkp",
-        .param1 = button,
-        .param2 = 0,
-    };
-
-    /* ロック中は release しない（押しっぱなし維持） */
-    if (data->locked) {
-        return ZMK_BEHAVIOR_OPAQUE;
-    }
-
-    /* クリックの release */
-    if (data->pending_release) {
-        zmk_behavior_invoke_binding(&mkp_binding, event, false); /* release */
-        data->pending_release = false;
-    }
-
+    (void)binding;
+    (void)event;
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
@@ -94,8 +91,9 @@ static const struct behavior_driver_api drag_toggle_api = {
 static int drag_toggle_init(const struct device *dev) {
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
     data->locked = false;
-    data->pending_release = false;
-    data->last_tap_ms = 0;
+    data->pending_single = false;
+    data->pending_button = MB1;
+    k_work_init_delayable(&data->single_work, do_click_work);
     return 0;
 }
 
