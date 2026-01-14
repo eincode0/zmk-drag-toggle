@@ -5,6 +5,7 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/drivers/behavior.h>
 
 #include <zmk/behavior.h>
@@ -15,13 +16,11 @@ struct drag_toggle_data {
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    /* one_param.yaml 想定：binding->param1 に MB1 などが入る */
     uint32_t button = binding->param1;
 
     const struct device *dev = binding->behavior_dev;
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    /* ZMK標準の &mkp を“呼び出す”ための binding を作る */
     struct zmk_behavior_binding mkp_binding = {
         .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(mkp)),
         .param1 = button,
@@ -29,11 +28,9 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
     };
 
     if (!data->locked) {
-        /* 押しっぱなし開始 = press */
         zmk_behavior_invoke_binding(&mkp_binding, event, true);
         data->locked = true;
     } else {
-        /* 押しっぱなし終了 = release */
         zmk_behavior_invoke_binding(&mkp_binding, event, false);
         data->locked = false;
     }
