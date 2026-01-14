@@ -5,12 +5,15 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/behavior.h>
+#include <zephyr/kernel.h>
 
 #include <zmk/behavior.h>
 #include <zmk/mouse.h>
 
 struct drag_toggle_data {
-    bool active;
+    bool locked;               // ドラッグロック中か
+    int64_t last_tap_ms;       // 前回タップ時刻
+    bool pending_lock;         // 次のreleaseでロックに入る（=ダブルタップ成立）
 };
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
@@ -20,15 +23,27 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
     const struct device *dev = binding->behavior_dev;
     struct drag_toggle_data *data = dev->data;
 
-    /* keymap から渡す： &drag_toggle MB1 */
     uint32_t button = binding->param1;
 
-    if (!data->active) {
-        zmk_mouse_button_press(button);
-        data->active = true;
-    } else {
+    /* ロック中なら、この押下で解除する（1回押すだけでOFF） */
+    if (data->locked) {
         zmk_mouse_button_release(button);
-        data->active = false;
+        data->locked = false;
+        data->pending_lock = false;
+        data->last_tap_ms = 0;
+        return ZMK_BEHAVIOR_OPAQUE;
+    }
+
+    /* 通常は押下＝press */
+    zmk_mouse_button_press(button);
+
+    /* ダブルタップ判定：前回タップから一定時間以内なら “releaseでロック” */
+    const int64_t now = k_uptime_get();
+    const int64_t term = 250; /* ダブルタップ猶予(ms) 好みで200-350 */
+
+    if (data->last_tap_ms != 0 && (now - data->last_tap_ms) <= term) {
+        data->pending_lock = true;
+        data->last_tap_ms = 0; /* 連続判定をここで消す */
     }
 
     return ZMK_BEHAVIOR_OPAQUE;
@@ -36,8 +51,26 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
 
 static int drag_toggle_released(struct zmk_behavior_binding *binding,
                                 struct zmk_behavior_binding_event event) {
-    (void)binding;
     (void)event;
+
+    const struct device *dev = binding->behavior_dev;
+    struct drag_toggle_data *data = dev->data;
+
+    uint32_t button = binding->param1;
+
+    /* ロック予定なら release を抑止してロックON（押しっぱなし維持） */
+    if (data->pending_lock) {
+        data->pending_lock = false;
+        data->locked = true;
+        return ZMK_BEHAVIOR_OPAQUE;
+    }
+
+    /* 通常クリック：release */
+    zmk_mouse_button_release(button);
+
+    /* 次のダブルタップ判定のために時刻を記録 */
+    data->last_tap_ms = k_uptime_get();
+
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
@@ -48,7 +81,9 @@ static const struct behavior_driver_api drag_toggle_api = {
 
 static int drag_toggle_init(const struct device *dev) {
     struct drag_toggle_data *data = dev->data;
-    data->active = false;
+    data->locked = false;
+    data->last_tap_ms = 0;
+    data->pending_lock = false;
     return 0;
 }
 
