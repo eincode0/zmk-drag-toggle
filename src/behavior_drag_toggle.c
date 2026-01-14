@@ -33,7 +33,7 @@ static inline void invoke_mkp(uint32_t button, struct zmk_behavior_binding_event
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
+    const struct device *dev = binding->behavior_dev;
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
     uint32_t button = binding->param1;
