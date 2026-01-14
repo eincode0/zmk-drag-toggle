@@ -1,3 +1,5 @@
 name: zmk-drag-toggle
 build:
   cmake: zephyr
+  settings:
+    dts_root: .
