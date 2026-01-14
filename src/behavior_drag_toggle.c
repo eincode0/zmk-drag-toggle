@@ -4,12 +4,10 @@
 #define DT_DRV_COMPAT zmk_behavior_drag_toggle
 
 #include <zephyr/device.h>
-#include <zephyr/kernel.h>
-#include <drivers/behavior.h>
+#include <zephyr/drivers/behavior.h>
 
 #include <zmk/behavior.h>
-#include <zmk/hid.h>
-#include <dt-bindings/zmk/mouse.h>
+#include <zmk/mouse.h>
 
 struct drag_toggle_data {
     bool active;
@@ -19,14 +17,17 @@ static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
     (void)event;
 
-    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
-    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
+    const struct device *dev = binding->behavior_dev;
+    struct drag_toggle_data *data = dev->data;
+
+    /* keymap から渡す： &drag_toggle MB1 */
+    uint32_t button = binding->param1;
 
     if (!data->active) {
-        zmk_hid_mouse_button_press(MB1);
+        zmk_mouse_button_press(button);
         data->active = true;
     } else {
-        zmk_hid_mouse_button_release(MB1);
+        zmk_mouse_button_release(button);
         data->active = false;
     }
 
@@ -46,7 +47,7 @@ static const struct behavior_driver_api drag_toggle_api = {
 };
 
 static int drag_toggle_init(const struct device *dev) {
-    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
+    struct drag_toggle_data *data = dev->data;
     data->active = false;
     return 0;
 }
