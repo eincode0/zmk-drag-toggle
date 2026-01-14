@@ -27,9 +27,9 @@ static inline void invoke_mkp(uint32_t button,
                               struct zmk_behavior_binding_event event,
                               bool pressed) {
     struct zmk_behavior_binding mkp_binding = {
-        .behavior_dev = DEVICE_DT_NAME_GET(DT_NODELABEL(mkp)),
-        .param1 = button,
-        .param2 = 0,
+    .behavior_dev = DT_LABEL(DT_NODELABEL(mkp)),
+    .param1 = button,
+    .param2 = 0,
     };
 
     (void)zmk_behavior_invoke_binding(&mkp_binding, event, pressed);
