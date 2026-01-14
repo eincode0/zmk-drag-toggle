@@ -5,6 +5,7 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
+#include <drivers/behavior.h>
 
 #include <zmk/behavior.h>
 
@@ -14,27 +15,26 @@ struct drag_toggle_data {
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    (void)event;
-
+    /* one_param.yaml 想定: param1 に MB1 などが入る */
     uint32_t button = binding->param1;
 
-    const struct device *dev =
-        zmk_behavior_get_binding(binding->behavior_dev);
-    struct drag_toggle_data *data =
-        (struct drag_toggle_data *)dev->data;
+    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
+    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    /* ZMK標準の &mkp を呼び出す */
+    /* ZMK標準の "mkp" を呼ぶ */
     struct zmk_behavior_binding mkp_binding = {
-    .behavior_dev = "mkp",   /* ← DT_LABEL(DT_NODELABEL(mkp)) をやめる */
-    .param1 = button,
-    .param2 = 0,
-};
+        .behavior_dev = "mkp",
+        .param1 = button,
+        .param2 = 0,
+    };
 
     if (!data->locked) {
-        zmk_behavior_queue_add(&mkp_binding, event, true);   // press
+        /* 押しっぱなし開始 */
+        zmk_behavior_invoke_binding(&mkp_binding, event, true);
         data->locked = true;
     } else {
-        zmk_behavior_queue_add(&mkp_binding, event, false);  // release
+        /* 押しっぱなし終了 */
+        zmk_behavior_invoke_binding(&mkp_binding, event, false);
         data->locked = false;
     }
 
@@ -59,11 +59,11 @@ static int drag_toggle_init(const struct device *dev) {
     return 0;
 }
 
-#define DRAG_TOGGLE_DEVICE(inst)                                   \
-    static struct drag_toggle_data drag_toggle_data_##inst;        \
-    DEVICE_DT_INST_DEFINE(inst, drag_toggle_init, NULL,            \
-        &drag_toggle_data_##inst, NULL,                            \
-        APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,          \
-        &drag_toggle_api);
+#define DRAG_TOGGLE_DEVICE(inst)                                                     \
+    static struct drag_toggle_data drag_toggle_data_##inst;                           \
+    DEVICE_DT_INST_DEFINE(inst, drag_toggle_init, NULL,                               \
+                          &drag_toggle_data_##inst, NULL,                             \
+                          APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,           \
+                          &drag_toggle_api);
 
 DT_INST_FOREACH_STATUS_OKAY(DRAG_TOGGLE_DEVICE)
