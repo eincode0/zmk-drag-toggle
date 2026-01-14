@@ -9,9 +9,25 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 
-#include <zmk/behavior.h>
-#include <zmk/hid.h>
-#include <dt-bindings/zmk/mouse.h>
+static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
+                               struct zmk_behavior_binding_event event) {
+    (void)event;
+
+    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
+    struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
+
+    uint32_t button = binding->param1;
+
+    if (!data->locked) {
+        zmk_hid_mouse_button_press(button);
+        data->locked = true;
+    } else {
+        zmk_hid_mouse_button_release(button);
+        data->locked = false;
+    }
+
+    return ZMK_BEHAVIOR_OPAQUE;
+}
 
 struct drag_toggle_data {
     bool locked;               // ドラッグロック中か
