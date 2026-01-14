@@ -5,61 +5,87 @@
 
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
+#include <zephyr/sys/util.h>
 #include <drivers/behavior.h>
 
 #include <zmk/behavior.h>
 
-/* ZMKの &mkp の実体(behavior)名 */
-#define MKP_BEHAVIOR_NAME "mouse_key_press"
-
-/* ダブルタップ判定(ms) */
 #ifndef DT_TAP_TERM_MS
-#define DT_TAP_TERM_MS 250
+#define DT_TAP_TERM_MS 250 /* ダブルタップ判定(ms) */
 #endif
 
 struct drag_toggle_data {
-    bool locked;
-    int64_t last_tap_ms;
+    bool locked;                 /* drag lock中か */
+    bool pending_single;         /* 単押し確定待ち */
+    uint32_t pending_button;     /* MB1等 */
+    struct zmk_behavior_binding_event pending_event; /* 単押し用にeventを保存 */
+    struct k_work_delayable single_work;
 };
 
-static inline void invoke_mkp(uint32_t button, struct zmk_behavior_binding_event event, bool pressed) {
-    struct zmk_behavior_binding mkp = {
-        .behavior_dev = MKP_BEHAVIOR_NAME,
+/* &mkp を呼ぶ（あなたの環境では behavior_dev が「const char*」系なので NAME_GET を使う） */
+static inline void invoke_mkp(uint32_t button,
+                              struct zmk_behavior_binding_event event,
+                              bool pressed) {
+    struct zmk_behavior_binding mkp_binding = {
+        .behavior_dev = DEVICE_DT_NAME_GET(DT_NODELABEL(mkp)),
         .param1 = button,
         .param2 = 0,
     };
-    zmk_behavior_invoke_binding(&mkp, event, pressed);
+
+    (void)zmk_behavior_invoke_binding(&mkp_binding, event, pressed);
+}
+
+static void do_click_work(struct k_work *work) {
+    struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+    struct drag_toggle_data *data =
+        CONTAINER_OF(dwork, struct drag_toggle_data, single_work);
+
+    if (!data->pending_single) {
+        return;
+    }
+
+    data->pending_single = false;
+
+    /* 単押し確定 = click（press→release） */
+    invoke_mkp(data->pending_button, data->pending_event, true);
+    invoke_mkp(data->pending_button, data->pending_event, false);
 }
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    const struct device *dev = binding->behavior_dev;
+    /* one_param.yaml 想定：binding->param1 に MB1/MB2... */
+    uint32_t button = binding->param1;
+
+    /* 自分(=drag_toggle)の状態領域を取得 */
+    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    uint32_t button = binding->param1;
-    int64_t now = k_uptime_get();
-
-    /* ロック中なら押した瞬間に解除 */
+    /* すでにロック中なら、次の押下で解除（release） */
     if (data->locked) {
-        invoke_mkp(button, event, false); /* release */
+        invoke_mkp(button, event, false);
         data->locked = false;
-        data->last_tap_ms = 0;
+
+        data->pending_single = false;
+        k_work_cancel_delayable(&data->single_work);
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    /* ダブルタップならロックON（press だけ送る） */
-    if (data->last_tap_ms != 0 && (now - data->last_tap_ms) <= DT_TAP_TERM_MS) {
-        invoke_mkp(button, event, true); /* press */
+    /* 単押し待ちが同じボタンで来た = ダブルタップ成立 → ロックON（pressしっぱなし） */
+    if (data->pending_single && data->pending_button == button) {
+        data->pending_single = false;
+        k_work_cancel_delayable(&data->single_work);
+
+        invoke_mkp(button, event, true); /* press保持 */
         data->locked = true;
-        data->last_tap_ms = 0;
         return ZMK_BEHAVIOR_OPAQUE;
     }
 
-    /* シングルタップは即クリック（press→release） */
-    invoke_mkp(button, event, true);
-    invoke_mkp(button, event, false);
+    /* 1回目：期限まで2回目が来なければ click にする */
+    data->pending_single = true;
+    data->pending_button = button;
+    data->pending_event = event; /* eventを保存 */
+    k_work_reschedule(&data->single_work, K_MSEC(DT_TAP_TERM_MS));
 
-    data->last_tap_ms = now;
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
@@ -78,7 +104,9 @@ static const struct behavior_driver_api drag_toggle_api = {
 static int drag_toggle_init(const struct device *dev) {
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
     data->locked = false;
-    data->last_tap_ms = 0;
+    data->pending_single = false;
+    data->pending_button = 0;
+    k_work_init_delayable(&data->single_work, do_click_work);
     return 0;
 }
 
