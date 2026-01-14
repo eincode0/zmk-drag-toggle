@@ -8,8 +8,8 @@
 #include <drivers/behavior.h>
 
 #include <zmk/behavior.h>
-
-/* ここは環境によって有無が分かれるので、まずは mouse 系は使わない（次の手で確実にする） */
+#include <zmk/hid.h>
+#include <dt-bindings/zmk/mouse.h>
 
 struct drag_toggle_data {
     bool active;
@@ -17,14 +17,18 @@ struct drag_toggle_data {
 
 static int drag_toggle_pressed(struct zmk_behavior_binding *binding,
                                struct zmk_behavior_binding_event event) {
-    const struct device *dev = binding->behavior_dev;
+    (void)event;
+
+    const struct device *dev = zmk_behavior_get_binding(binding->behavior_dev);
     struct drag_toggle_data *data = (struct drag_toggle_data *)dev->data;
 
-    data->active = !data->active;
-
-    /* ここはいったんダミー（ビルド通過確認用）
-       ビルドが通ったら「押す/離す」を本実装に差し替える */
-    (void)event;
+    if (!data->active) {
+        zmk_hid_mouse_button_press(MB1);
+        data->active = true;
+    } else {
+        zmk_hid_mouse_button_release(MB1);
+        data->active = false;
+    }
 
     return ZMK_BEHAVIOR_OPAQUE;
 }
